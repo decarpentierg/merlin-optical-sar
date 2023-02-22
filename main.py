@@ -11,8 +11,9 @@ from Dataset import *
 from model import *
 from utils import *
 
-basedir = '/home/dalsasso/Desktop/navette_emanuele/projets/MERLIN/centered_Sentinel_stripmap_MVA'
-datasetdir = '/home/dalsasso/Desktop/navette_emanuele/dataset/data/sentinel/Sentinel_stripmap'
+ROOT_DIR = os.path.dirname(os.path.realpath(__file__))
+basedir = ROOT_DIR + '/basedir'
+datasetdir = ROOT_DIR
 
 torch.manual_seed(2)
 
