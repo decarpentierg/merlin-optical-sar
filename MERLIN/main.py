@@ -11,8 +11,9 @@ from Dataset import *
 from model import *
 from utils import *
 
-basedir = '/home/dalsasso/Desktop/navette_emanuele/projets/MERLIN/merlin'
-datasetdir = '/home/dalsasso/Desktop/navette_emanuele/dataset/data/TSX/'
+ROOT_DIR = os.path.dirname(os.path.realpath(__file__))
+basedir = ROOT_DIR + '/basedir'
+datasetdir = ROOT_DIR + '/pourMVA'
 
 torch.manual_seed(2)
 
@@ -32,11 +33,11 @@ parser.add_argument('--phase', dest='phase', default='train', help='train or tes
 parser.add_argument('--checkpoint_dir', dest='ckpt_dir', default=basedir+"/saved_model",
                     help='models are saved here')
 
-parser.add_argument('--sample_dir', dest='sample_dir', default=basedir+"/sample", help='sample are saved here')
+parser.add_argument('--sample_dir', dest='sample_dir', default=basedir+'/sample', help='sample are saved here')
 parser.add_argument('--test_dir', dest='test_dir', default=basedir+"/test", help='test sample are saved here')
-parser.add_argument('--eval_set', dest='eval_set', default=datasetdir+'/validation/spotlight/', help='dataset for eval in training')
-parser.add_argument('--test_set', dest='test_set', default=datasetdir+'/validation/spotlight/', help='dataset for testing')
-parser.add_argument('--training_set', dest='training_set', default=datasetdir+'/train/spotlight/', help='dataset for training')
+parser.add_argument('--eval_set', dest='eval_set', default=datasetdir+'/validation/', help='dataset for eval in training')
+parser.add_argument('--test_set', dest='test_set', default=datasetdir+'/validation/', help='dataset for testing')
+parser.add_argument('--training_set', dest='training_set', default=datasetdir+'/train/', help='dataset for training')
 parser.add_argument('--device', dest='device', default=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), help='gpu or cpu')
 
 args = parser.parse_args()
