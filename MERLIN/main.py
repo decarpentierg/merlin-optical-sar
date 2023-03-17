@@ -3,6 +3,7 @@
 import argparse
 from glob import glob
 import os
+from pathlib import Path
 
 import numpy as np
 import torch
@@ -11,7 +12,7 @@ from Dataset import *
 from model import *
 from utils import *
 
-ROOT_DIR = os.path.dirname(os.path.realpath(__file__))
+ROOT_DIR = Path(__file__).parent.parent.absolute().as_posix()  # get path to project root
 basedir = ROOT_DIR + '/basedir'
 datasetdir = ROOT_DIR + '/pourMVA'
 
@@ -34,7 +35,7 @@ parser.add_argument('--checkpoint_dir', dest='ckpt_dir', default=basedir+"/saved
                     help='models are saved here')
 
 parser.add_argument('--sample_dir', dest='sample_dir', default=basedir+'/sample', help='sample are saved here')
-parser.add_argument('--test_dir', dest='test_dir', default=basedir+"/test", help='test sample are saved here')
+parser.add_argument('--test_dir', dest='test_dir', default=basedir+'/test', help='test sample are saved here')
 parser.add_argument('--eval_set', dest='eval_set', default=datasetdir+'/validation/', help='dataset for eval in training')
 parser.add_argument('--test_set', dest='test_set', default=datasetdir+'/validation/', help='dataset for testing')
 parser.add_argument('--training_set', dest='training_set', default=datasetdir+'/train/', help='dataset for training')
