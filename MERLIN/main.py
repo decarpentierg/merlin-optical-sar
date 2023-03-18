@@ -14,7 +14,7 @@ from utils import *
 
 ROOT_DIR = Path(__file__).parent.parent.absolute().as_posix()  # get path to project root
 basedir = ROOT_DIR + '/MERLIN'
-datasetdir = ROOT_DIR + '/dataset_Saclay_SAR'
+datasetdir = ROOT_DIR + '/dataset_Saclay_SAR+OPT+SAR'
 
 torch.manual_seed(2)
 
