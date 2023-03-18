@@ -21,12 +21,13 @@ import numpy as np
 
 class AE(torch.nn.Module):
 
-    def __init__(self,batch_size,eval_batch_size,device):
+    def __init__(self,batch_size,eval_batch_size,device,method):
         super().__init__()
 
         self.batch_size=batch_size
         self.eval_batch_size=eval_batch_size
         self.device=device
+        self.method=method
 
         self.x = None
         self.height = None
@@ -56,6 +57,33 @@ class AE(torch.nn.Module):
                                     padding='same')
         self.enc6 = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
                                     padding='same')
+        
+        # add layers to process the additional images
+        ############################################################################################################
+
+        if method != 'SAR':
+          if method == 'SAR+OPT' or method == 'SAR+SAR' :
+            n_channels_sup = 1
+          else:
+            n_channels_sup = 2
+          self.enc0_opt = torch.nn.Conv2d(in_channels=n_channels_sup, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
+                                        padding='same')
+          
+          self.enc1_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
+                                      padding='same')
+          self.enc2_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
+                                      padding='same')
+          self.enc3_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
+                                      padding='same')
+          self.enc4_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
+                                      padding='same')
+          self.enc5_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
+                                      padding='same')
+          self.enc6_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
+                                      padding='same')
+          
+        ############################################################################################################
+              
 
         self.dec5 = torch.nn.Conv2d(in_channels=96, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
                                     padding='same')
@@ -103,63 +131,124 @@ class AE(torch.nn.Module):
         a numpy array containing the denoised image i.e the image itself minus the noise
 
         """
-        x=torch.reshape(x, [batch_size, 1, 256, 256])
-        skips = [x]
+        x_SAR=torch.reshape(x[:,:,:,:,0], [batch_size, 1, 256, 256])
+        skips_SAR = [x_SAR]
 
-        n = x
+        n_SAR = x_SAR
 
         # ENCODER
-        n = self.leaky(self.enc0(n))
-        n = self.leaky(self.enc1(n))
-        n = self.pool(n)
-        skips.append(n)
+        n_SAR = self.leaky(self.enc0(n_SAR))
+        n_SAR = self.leaky(self.enc1(n_SAR))
+        n_SAR = self.pool(n_SAR)
+        skips_SAR.append(n_SAR)
 
-        n = self.leaky(self.enc2(n))
-        n = self.pool(n)
-        skips.append(n)
+        n_SAR = self.leaky(self.enc2(n_SAR))
+        n_SAR = self.pool(n_SAR)
+        skips_SAR.append(n_SAR)
 
-        n = self.leaky(self.enc3(n))
-        n = self.pool(n)
-        skips.append(n)
+        n_SAR = self.leaky(self.enc3(n_SAR))
+        n_SAR = self.pool(n_SAR)
+        skips_SAR.append(n_SAR)
 
-        n = self.leaky(self.enc4(n))
-        n = self.pool(n)
-        skips.append(n)
+        n_SAR = self.leaky(self.enc4(n_SAR))
+        n_SAR = self.pool(n_SAR)
+        skips_SAR.append(n_SAR)
 
-        n = self.leaky(self.enc5(n))
-        n = self.pool(n)
-        n = self.leaky(self.enc6(n))
+        n_SAR = self.leaky(self.enc5(n_SAR))
+        n_SAR = self.pool(n_SAR)
+        n_SAR = self.leaky(self.enc6(n_SAR))
+
+        ############################################################################################################
+        # ENCODER OPTIC 
+        if self.method != 'SAR':
+          if self.method == 'SAR+OPT' or self.method == 'SAR+SAR' :
+            n_channels_sup = 1
+          else:
+            n_channels_sup = 2
+          x_sup = torch.reshape(x[:, :, :,:, 1:], [batch_size, n_channels_sup, 256, 256])
+          skips_sup = [x_sup]
+
+          n_sup = x_sup
+
+          n_sup = self.leaky(self.enc0_opt(n_sup))
+          n_sup = self.leaky(self.enc1_opt(n_sup))
+          n_sup = self.pool(n_sup)
+          skips_sup.append(n_sup)
+
+          n_sup = self.leaky(self.enc2_opt(n_sup))
+          n_sup = self.pool(n_sup)
+          skips_sup.append(n_sup)
+
+          n_sup = self.leaky(self.enc3_opt(n_sup))
+          n_sup = self.pool(n_sup)
+          skips_sup.append(n_sup)
+
+          n_sup = self.leaky(self.enc4_opt(n_sup))
+          n_sup = self.pool(n_sup)
+          skips_sup.append(n_sup)
+
+          n_sup = self.leaky(self.enc5_opt(n_sup))
+          n_sup = self.pool(n_sup)
+          n_sup = self.leaky(self.enc6_opt(n_sup))
+
+          # COMBINE
+          n = n_SAR + n_sup
+        else:
+          n = n_SAR
+
+
+        ############################################################################################################
 
 
         # DECODER
         n = self.upscale2d(n)
-        n = torch.cat((n, skips.pop()), dim=1)
+        if self.method != 'SAR':
+          skips = skips_SAR.pop()+ skips_sup.pop()
+        else:
+          skips = skips_SAR.pop()
+        n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec5(n))
         n = self.leaky(self.dec5b(n))
 
         n = self.upscale2d(n)
-        n = torch.cat((n, skips.pop()), dim=1)
+        if self.method != 'SAR':
+          skips = skips_SAR.pop()+ skips_sup.pop()
+        else:
+          skips = skips_SAR.pop()
+        n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec4(n))
         n = self.leaky(self.dec4b(n))
 
         n = self.upscale2d(n)
-        n = torch.cat((n, skips.pop()), dim=1)
+        if self.method != 'SAR':
+          skips = skips_SAR.pop()+ skips_sup.pop()
+        else:
+          skips = skips_SAR.pop()
+        n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec3(n))
         n = self.leaky(self.dec3b(n))
 
         n = self.upscale2d(n)
-        n = torch.cat((n, skips.pop()), dim=1)
+        if self.method != 'SAR':
+          skips = skips_SAR.pop()+ skips_sup.pop()
+        else:
+          skips = skips_SAR.pop()
+        n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec2(n))
         n = self.leaky(self.dec2b(n))
 
         n = self.upscale2d(n)
-        n = torch.cat((n, skips.pop()), dim=1)
+        if self.method != 'SAR':
+          skips = skips_SAR.pop()+ skips_sup.pop()
+        else:
+          skips = skips_SAR.pop()
+        n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec1a(n))
         n = self.leaky(self.dec1b(n))
 
         n = self.dec1(n)
 
-        return x-n
+        return x_SAR-n
 
     def loss_function(self,output,target,batch_size):
       """ Defines and runs the loss function
@@ -204,21 +293,26 @@ class AE(torch.nn.Module):
       M = 10.089038980848645
       m = -1.429329123112601
 
-      x, y = batch
+      x, y, im = batch
       x=x.to(self.device)
       y=y.to(self.device)
-
-
+      im=im.to(self.device)
 
 
       if (batch_number%2==0):
         x=(torch.log(torch.square(x)+1e-3)-2*m)/(2*(M-m))
-        out = self.forward(x,self.batch_size)
+        if self.method == 'SAR':
+          out = self.forward(torch.unsqueeze(x,-1),self.batch_size)
+        else:
+          out = self.forward(torch.cat((torch.unsqueeze(x,-1),im),-1) ,self.batch_size)
         loss = self.loss_function(out, y,self.batch_size)
 
       else:
         y=(torch.log(torch.square(y)+1e-3)-2*m)/(2*(M-m))
-        out = self.forward(y,self.batch_size)
+        if self.method == 'SAR':
+          out = self.forward(torch.unsqueeze(y,-1),self.batch_size)
+        else:
+          out = self.forward(torch.cat((torch.unsqueeze(y,-1),im),-1),self.batch_size)
         loss = self.loss_function(out,x,self.batch_size)
 
       return loss
@@ -241,17 +335,21 @@ class AE(torch.nn.Module):
       """
 
 
-      image_real_part,image_imaginary_part = batch
+      image_real_part,image_imaginary_part,im = batch
 
       image_real_part=image_real_part.to(self.device)
       image_imaginary_part=image_imaginary_part.to(self.device)
-
+      im=im.to(self.device)
       # Normalization
       image_real_part_normalized=(torch.log(torch.square(image_real_part)+1e-3)-2*m)/(2*(M-m))
       image_imaginary_part_normalized=(torch.log(torch.square(image_imaginary_part)+1e-3)-2*m)/(2*(M-m))
 
-      out_real = self.forward(image_real_part_normalized,self.eval_batch_size)
-      out_imaginary = self.forward(image_imaginary_part_normalized,self.eval_batch_size)
+      if self.method == 'SAR':
+        out_real = self.forward(torch.unsqueeze(image_real_part_normalized,-1),self.eval_batch_size)
+        out_imaginary = self.forward(torch.unsqueeze(image_imaginary_part_normalized,-1),self.eval_batch_size)
+      else:
+        out_real = self.forward( torch.cat((image_real_part_normalized,im),-1),self.eval_batch_size)
+        out_imaginary = self.forward(torch.cat((image_imaginary_part_normalized,im),-1),self.eval_batch_size)
 
       output_clean_image = 0.5*(np.square(denormalize_sar(out_real.cpu().numpy()))+np.square(denormalize_sar(out_imaginary.cpu().numpy())))
       # # # # # # # # # # # # # # # # # # # # # # # # # # # # # # #
@@ -281,10 +379,11 @@ class AE(torch.nn.Module):
 
 
 
-        image_real_part,image_imaginary_part = im
+        image_real_part,image_imaginary_part,opt = im
         im_h_start, im_w_start = image_real_part.size(dim=2), image_real_part.size(dim=3)
         image_real_part=image_real_part.to(self.device)
         image_imaginary_part=image_imaginary_part.to(self.device)
+        opt=opt.to(self.device)
 
         # Normalization
         image_real_part_normalized=(torch.log(torch.square(image_real_part)+1e-3)-2*m)/(2*(M-m))
@@ -314,9 +413,10 @@ class AE(torch.nn.Module):
                 for y in y_range:
                     patch_test_real = image_real_part_normalized[: , x:x + pat_size, y:y + pat_size, :]
                     patch_test_imag = image_imaginary_part_normalized[: , x:x + pat_size, y:y + pat_size, :]
+                    patch_test_opt = opt[: , x:x + pat_size, y:y + pat_size, :]
 
-                    tmp_real = self.forward(patch_test_real, self.eval_batch_size)
-                    tmp_imag = self.forward(patch_test_imag, self.eval_batch_size)
+                    tmp_real = self.forward(torch.cat((patch_test_real,patch_test_opt),dim=2), self.eval_batch_size)
+                    tmp_imag = self.forward(torch.cat((patch_test_real,patch_test_opt),dim=2), self.eval_batch_size)
 
                     tmp = 0.5*(np.square(denormalize_sar(tmp_real.cpu().numpy()))+np.square(denormalize_sar(tmp_imag.cpu().numpy())))
 

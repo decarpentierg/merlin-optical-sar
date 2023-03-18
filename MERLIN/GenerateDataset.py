@@ -14,6 +14,8 @@ The code scans among the training images and then for data_aug_times
 class GenerateDataset():
 
     def symetrisation_patch_gen(self, ima):
+        sup = ima[:,:,2:]
+        ima = ima[:,:,:2]
         S = np.fft.fftshift(np.fft.fft2(ima[:,:,0]+1j*ima[:,:,1]))
         p = np.zeros((S.shape[0])) # azimut (ncol)
         for i in range(S.shape[0]):
@@ -66,9 +68,14 @@ class GenerateDataset():
 
         Sf = np.roll(S2,int(shift_range*q.shape[0]),axis=1)
         ima2 = np.fft.ifft2(np.fft.ifftshift(Sf))
-        return np.stack((np.real(ima2),np.imag(ima2)),axis=2)
+        return np.concatenate((np.stack((np.real(ima2),np.imag(ima2)),axis=2),sup),axis=2)
 
-    def generate_patches(self,src_dir="./dataset/data/Train",pat_size=256,step=0,stride=64,bat_size=4,data_aug_times=1,n_channels=2):
+    def generate_patches(self,src_dir="./dataset/data/Train",pat_size=256,step=0,stride=64,bat_size=4,data_aug_times=1,method='SAR'):
+        n_channels = 2
+        if method == 'SAR+SAR' or method == 'SAR+OPT' :
+            n_channels += 1
+        if method == 'SAR+OPT+SAR':
+            n_channels += 1
         count = 0
         filepaths = glob.glob(src_dir + '/*.npy')
         print("number of training data %d" % len(filepaths))
@@ -105,7 +112,7 @@ class GenerateDataset():
             im_w = np.size(img, 1)
             for x in range(0 + step, im_h - pat_size, stride):
                 for y in range(0 + step, im_w - pat_size, stride):
-                    inputs[count, :, :, :] = self.symetrisation_patch_gen(img_s[x:x + pat_size, y:y + pat_size, :2])
+                    inputs[count, :, :, :] = self.symetrisation_patch_gen(img_s[x:x + pat_size, y:y + pat_size, :n_channels])
                     count += 1
 
 

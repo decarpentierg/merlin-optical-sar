@@ -67,7 +67,7 @@ for i in range(sar.shape[-1]):
         img_train_combined[:,:,2] = opt
     elif args.method == 'SAR+SAR':
         if args.dataset == 'Saclay':
-            img_train_combined[:,:,:] = np.abs(sar[:,:,3]) #higher resolution SAR image
+            img_train_combined[:,:,2] = np.abs(sar[:,:,3]) #higher resolution SAR image
             if i >=2: # in this case we only use the first three sar images
                 break
         else:

@@ -21,6 +21,8 @@ cn = c / (M - m)  # normalized (0,1) mean of log speckle
 
 
 def symetrisation_patch(ima):
+    sup = ima[:,:,2:]
+    ima = ima[:,:,:2]
     S = np.fft.fftshift(np.fft.fft2(ima[:,:,0]+1j*ima[:,:,1]))
     p = np.zeros((S.shape[0])) # azimut (ncol)
     for i in range(S.shape[0]):
@@ -70,7 +72,7 @@ def symetrisation_patch(ima):
 
     Sf = np.roll(S2,int(shift_range*q.shape[0]),axis=1)
     ima2 = np.fft.ifft2(np.fft.ifftshift(Sf))
-    return np.stack((np.real(ima2),np.imag(ima2)),axis=2)
+    return np.concatenate((np.stack((np.real(ima2),np.imag(ima2)),axis=2),sup),axis=2)
 
 
 def symetrisation_patch_test(real_part,imag_part):
@@ -135,10 +137,10 @@ def normalize_sar(im):
 def denormalize_sar(im):
     return np.exp((np.clip(np.squeeze(im),0,1))*(M-m)+m)
 
-def load_train_data(filepath, patch_size, batch_size, stride_size, n_data_augmentation): #TODO: add control on training data: exit if does not exists
+def load_train_data(filepath, patch_size, batch_size, stride_size, n_data_augmentation, method): #TODO: add control on training data: exit if does not exists
     datagen = GenerateDataset()
     imgs = datagen.generate_patches(src_dir=filepath, pat_size=patch_size, step=0,
-                             stride=stride_size, bat_size=batch_size, data_aug_times=n_data_augmentation)
+                             stride=stride_size, bat_size=batch_size, data_aug_times=n_data_augmentation, method=method)
     return imgs
 
 def load_sar_images(filelist):
@@ -165,6 +167,7 @@ def store_data_and_plot(im, threshold, filename):
 
 
 def save_sar_images(denoised, noisy, imagename, save_dir, groundtruth=None):
+    imagename = imagename.split('\\')[-1]
     choices = {'marais1':190.92, 'marais2': 168.49, 'saclay':470.92, 'lely':235.90, 'ramb':167.22,
            'risoul':306.94, 'limagne':178.43, 'saintgervais':560, 'Serreponcon': 450.0,
           'Sendai':600.0, 'Paris': 1291.0, 'Berlin': 1036.0, 'Bergen': 553.71,

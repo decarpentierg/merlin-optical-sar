@@ -13,8 +13,8 @@ from model import *
 from utils import *
 
 ROOT_DIR = Path(__file__).parent.parent.absolute().as_posix()  # get path to project root
-basedir = ROOT_DIR + '/basedir'
-datasetdir = ROOT_DIR + '/pourMVA'
+basedir = ROOT_DIR + '/MERLIN'
+datasetdir = ROOT_DIR + '/dataset_Saclay_SAR'
 
 torch.manual_seed(2)
 
@@ -36,12 +36,17 @@ parser.add_argument('--checkpoint_dir', dest='ckpt_dir', default=basedir+"/saved
 
 parser.add_argument('--sample_dir', dest='sample_dir', default=basedir+'/sample', help='sample are saved here')
 parser.add_argument('--test_dir', dest='test_dir', default=basedir+'/test', help='test sample are saved here')
-parser.add_argument('--eval_set', dest='eval_set', default=datasetdir+'/validation/', help='dataset for eval in training')
-parser.add_argument('--test_set', dest='test_set', default=datasetdir+'/validation/', help='dataset for testing')
-parser.add_argument('--training_set', dest='training_set', default=datasetdir+'/train/', help='dataset for training')
+parser.add_argument('--eval_set', dest='eval_set', default=datasetdir+'/validation/spotlight/', help='dataset for eval in training')
+parser.add_argument('--test_set', dest='test_set', default=datasetdir+'/validation/spotlight/', help='dataset for testing')
+parser.add_argument('--training_set', dest='training_set', default=datasetdir+'/train/spotlight/', help='dataset for training')
 parser.add_argument('--device', dest='device', default=torch.device("cuda:0" if torch.cuda.is_available() else "cpu"), help='gpu or cpu')
 
+parser.add_argument('--method', dest='method', default='SAR', help='method to use : SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR')
+
 args = parser.parse_args()
+
+if args.method != 'SAR' and args.method != 'SAR+OPT' and args.method != 'SAR+SAR' and args.method != 'SAR+OPT+SAR':
+    raise ValueError('Method must be either SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR')
 
 torch.autograd.set_detect_anomaly(True)
 
@@ -161,14 +166,13 @@ def denoiser_train(model,lr_list,gn_list):
 
   """
   # Prepare train DataLoader
-  train_data = load_train_data(args.training_set, args.patch_size, args.batch_size, args.stride_size, args.n_data_augmentation) # range [0; 1]
-  print(train_data.shape)
-  train_dataset = Dataset(train_data)
+  train_data = load_train_data(args.training_set, args.patch_size, args.batch_size, args.stride_size, args.n_data_augmentation, method=args.method) # range [0; 1]
+  train_dataset = Dataset(train_data, args.method)
 
   train_loader = torch.utils.data.DataLoader(train_dataset,batch_size=args.batch_size,shuffle=True,drop_last=True)
 
   # Prepare Validation DataLoader
-  eval_dataset = ValDataset(args.eval_set) # range [0; 1]
+  eval_dataset = ValDataset(args.eval_set, args.method) # range [0; 1]
   eval_loader = torch.utils.data.DataLoader(eval_dataset,batch_size=args.val_batch_size,shuffle=False,drop_last=True)
   eval_files = glob(args.eval_set+'*.npy')
 
@@ -192,7 +196,7 @@ def denoiser_test(model):
 
     """
     # Prepare Validation DataLoader
-    test_dataset = ValDataset(args.test_set) # range [0; 1]
+    test_dataset = ValDataset(args.test_set, args.method) # range [0; 1]
     test_loader = torch.utils.data.DataLoader(test_dataset,batch_size=args.val_batch_size,shuffle=False,drop_last=True)
     test_files = glob(args.test_set+'*.npy')
 
@@ -235,7 +239,7 @@ def main():
 
 
 
-  model = AE(args.batch_size,args.val_batch_size,args.device)
+  model = AE(args.batch_size,args.val_batch_size,args.device,args.method)
   model.to(args.device)
 
   if args.phase == 'train':
