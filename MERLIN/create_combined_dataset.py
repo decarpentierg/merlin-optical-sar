@@ -25,12 +25,12 @@ if args.method != 'SAR' and args.method != 'SAR+OPT' and args.method != 'SAR+SAR
 
 #import
 if args.dataset == 'Saclay':
-    sar_no_register = mvalab.imz2mat('data\Saclay\TelecomParisZ4.IMA')[0]
-    opt_no_register = mvalab.imz2mat('data\Saclay\TelecomParisOPT.IMA')[0][:, :, 0] #only the first image is relevant
+    sar_no_register = mvalab.imz2mat('data/Saclay/TelecomParisZ4.IMA')[0]
+    opt_no_register = mvalab.imz2mat('data/Saclay/TelecomParisOPT.IMA')[0][:, :, 0] #only the first image is relevant
     di, dj = -19, 147  # define registering translation
 else:
-    opt_no_register = mvalab.imz2mat('data\Sendai\PileTSX_AVANT_surTSX_1024x1024RECALOPT.IMA')[0][:988, 33:]
-    sar_no_register = mvalab.imz2mat('data\Sendai\PileTSX_AVANT_surTSX_1024x1024RECALZ4.IMA')[0][:988, 33:,:]
+    opt_no_register = mvalab.imz2mat('data/Sendai/PileTSX_AVANT_surTSX_1024x1024RECALOPT.IMA')[0][:988, 33:]
+    sar_no_register = mvalab.imz2mat('data/Sendai/PileTSX_AVANT_surTSX_1024x1024RECALZ4.IMA')[0][:988, 33:,:]
     di, dj = 5, -23  # define registering translation
 
 # register images

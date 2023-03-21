@@ -258,12 +258,6 @@ def cal_psnr(Shat, S):
     return res
 
 
-def tf_psnr(im1, im2):
-    # assert pixel value range is 0-1
-    mse = tf.losses.mean_squared_error(labels=im2 * 255.0, predictions=im1 * 255.0)
-    return 10.0 * (tf.log(255.0 ** 2 / mse) / tf.log(10.0))
-
-
 def init_weights(m):
       if type(m) == torch.nn.Linear:
           torch.nn.init.xavier_normal_(m.weight,gain=2.0)

@@ -1,143 +1,121 @@
-import time
 import numpy as np
-import os
+import torch
 
-from utils import *
-from scipy import special
-import argparse
+from utils import denormalize_sar, save_sar_images
 
 
 # DEFINE PARAMETERS OF SPECKLE AND NORMALIZATION FACTOR
 M = 10.089038980848645
 m = -1.429329123112601
-L = 1
-c = (1 / 2) * (special.psi(L) - np.log(L))
-cn = c / (M - m)  # normalized (0,1) mean of log speckle
-
-import torch
-import numpy as np
-
 
 
 class AE(torch.nn.Module):
+    """Auto-Encoder/U-Net
+    
+    Attributes
+    ----------
+    batch_size: int
+        batch size
+    
+    eval_batch_size: int
+        batch size for evaluation
+    
+    device: str
+        name of device to use
+    
+    method: str
+        either 'SAR' or 'SAR+OPT' or 'SAR+SAR' or 'SAR+OPT+SAR'
+        defines what images are given as input to the neural network
+    """
 
-    def __init__(self,batch_size,eval_batch_size,device,method):
+    def __init__(self, batch_size, eval_batch_size, device, method):
+        """Class constructor
+        
+        Parameters
+        ----------
+        See class docstring.
+        """
         super().__init__()
 
-        self.batch_size=batch_size
-        self.eval_batch_size=eval_batch_size
-        self.device=device
-        self.method=method
+        # Set attributes
+        self.batch_size = batch_size
+        self.eval_batch_size = eval_batch_size
+        self.device = device
+        self.method = method
 
-        self.x = None
-        self.height = None
-        self.width = None
-        self.out_channels = None
-        self.kernel_size_cv2d = None
-        self.stride_cv2d = None
-        self.padding_cv2d = None
-        self.kernel_size_mp2d = None
-        self.stride_mp2d = None
-        self.padding_mp2d = None
-        self.alpha = None
+        # Compute number of auxiliary channels to add, depending on the chosen method
+        self.n_channels_sup = {'SAR+OPT': 1, 'SAR+SAR': 2, 'SAR+OPT+SAR': 3}[method]
+        
+        # ------------
+        # Build layers
+        # ------------
+
+        # Max-pooling
         self.pool = torch.nn.MaxPool2d(kernel_size=2, stride=2)
+        # Activation function
         self.leaky = torch.nn.LeakyReLU(0.1)
 
-        self.enc0 = torch.nn.Conv2d(in_channels=1, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.enc1 = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.enc2 = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.enc3 = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.enc4 = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.enc5 = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.enc6 = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
+        conv_kwargs = {'kernel_size': (3, 3), 'stride': (1, 1), 'padding': 'same'}
+
+        # Main encoder
+        self.enc0 = torch.nn.Conv2d(in_channels=1, out_channels=48, **conv_kwargs)
+        self.enc1 = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+        self.enc2 = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+        self.enc3 = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+        self.enc4 = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+        self.enc5 = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+        self.enc6 = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
         
-        # add layers to process the additional images
-        ############################################################################################################
-
+        # Auxiliary encoder. Processes additional images (optical, other SAR images, ...)
         if method != 'SAR':
-          if method == 'SAR+OPT' or method == 'SAR+SAR' :
-            n_channels_sup = 1
-          else:
-            n_channels_sup = 2
-          self.enc0_opt = torch.nn.Conv2d(in_channels=n_channels_sup, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                        padding='same')
-          
-          self.enc1_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                      padding='same')
-          self.enc2_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                      padding='same')
-          self.enc3_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                      padding='same')
-          self.enc4_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                      padding='same')
-          self.enc5_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                      padding='same')
-          self.enc6_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, kernel_size=(3, 3), stride=(1, 1),
-                                      padding='same')
-          
-        ############################################################################################################
-              
-
-        self.dec5 = torch.nn.Conv2d(in_channels=96, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.dec5b = torch.nn.Conv2d(in_channels=96, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
-                                     padding='same')
-        self.dec4 = torch.nn.Conv2d(in_channels=144, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.dec4b = torch.nn.Conv2d(in_channels=96, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
-                                     padding='same')
-        self.dec3 = torch.nn.Conv2d(in_channels=144, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.dec3b = torch.nn.Conv2d(in_channels=96, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
-                                     padding='same')
-        self.dec2 = torch.nn.Conv2d(in_channels=144, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
-        self.dec2b = torch.nn.Conv2d(in_channels=96, out_channels=96, kernel_size=(3, 3), stride=(1, 1),
-                                     padding='same')
-        self.dec1a = torch.nn.Conv2d(in_channels=97, out_channels=64, kernel_size=(3, 3), stride=(1, 1),
-                                     padding='same')
-        self.dec1b = torch.nn.Conv2d(in_channels=64, out_channels=32, kernel_size=(3, 3), stride=(1, 1),
-                                     padding='same')
-        self.dec1 = torch.nn.Conv2d(in_channels=32, out_channels=1, kernel_size=(3, 3), stride=(1, 1),
-                                    padding='same')
+            self.enc0_opt = torch.nn.Conv2d(in_channels=self.n_channels_sup, out_channels=48, **conv_kwargs)
+            self.enc1_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+            self.enc2_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+            self.enc3_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+            self.enc4_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+            self.enc5_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+            self.enc6_opt = torch.nn.Conv2d(in_channels=48, out_channels=48, **conv_kwargs)
+        
+        # Decoder
+        self.dec5 = torch.nn.Conv2d(in_channels=96, out_channels=96, **conv_kwargs)
+        self.dec5b = torch.nn.Conv2d(in_channels=96, out_channels=96, **conv_kwargs)
+        self.dec4 = torch.nn.Conv2d(in_channels=144, out_channels=96, **conv_kwargs)
+        self.dec4b = torch.nn.Conv2d(in_channels=96, out_channels=96, **conv_kwargs)
+        self.dec3 = torch.nn.Conv2d(in_channels=144, out_channels=96, **conv_kwargs)
+        self.dec3b = torch.nn.Conv2d(in_channels=96, out_channels=96, **conv_kwargs)
+        self.dec2 = torch.nn.Conv2d(in_channels=144, out_channels=96, **conv_kwargs)
+        self.dec2b = torch.nn.Conv2d(in_channels=96, out_channels=96, **conv_kwargs)
+        self.dec1a = torch.nn.Conv2d(in_channels=97, out_channels=64, **conv_kwargs)
+        self.dec1b = torch.nn.Conv2d(in_channels=64, out_channels=32, **conv_kwargs)
+        self.dec1 = torch.nn.Conv2d(in_channels=32, out_channels=1, **conv_kwargs)
 
         self.upscale2d = torch.nn.UpsamplingNearest2d(scale_factor=2)
 
 
-    def forward(self,x ,batch_size):
-        """  Defines a class for an autoencoder algorithm for an object (image) x
-
-        An autoencoder is a specific type of feedforward neural networks where the
-        input is the same as the
-        output. It compresses the input into a lower-dimensional code and then
-        reconstruct the output from this representattion. It is a dimensionality
-        reduction algorithm
+    def forward(self, x, batch_size):
+        """Forward propagation for an image x
 
         Parameters
         ----------
         x : np.array
-        a numpy array containing image
+        a numpy array containing an image
 
         Returns
         ----------
-        x-n : np.array
+        x - n : np.array
         a numpy array containing the denoised image i.e the image itself minus the noise
-
         """
-        x_SAR=torch.reshape(x[:,:,:,:,0], [batch_size, 1, 256, 256])
-        skips_SAR = [x_SAR]
+        # Reshape input
+        x = torch.reshape(x[:, :, :, :, 0], [batch_size, 1, 256, 256])
 
-        n_SAR = x_SAR
+        # ------------
+        # Main encoder
+        # ------------
 
-        # ENCODER
-        n_SAR = self.leaky(self.enc0(n_SAR))
+        # List for skip connections
+        skips_SAR = [x]
+
+        n_SAR = self.leaky(self.enc0(x))
         n_SAR = self.leaky(self.enc1(n_SAR))
         n_SAR = self.pool(n_SAR)
         skips_SAR.append(n_SAR)
@@ -158,164 +136,144 @@ class AE(torch.nn.Module):
         n_SAR = self.pool(n_SAR)
         n_SAR = self.leaky(self.enc6(n_SAR))
 
-        ############################################################################################################
-        # ENCODER OPTIC 
+        # -----------------
+        # Auxiliary encoder
+        # -----------------
+
         if self.method != 'SAR':
-          if self.method == 'SAR+OPT' or self.method == 'SAR+SAR' :
-            n_channels_sup = 1
-          else:
-            n_channels_sup = 2
-          x_sup = torch.reshape(x[:, :, :,:, 1:], [batch_size, n_channels_sup, 256, 256])
-          skips_sup = [x_sup]
+            # List for skip connections
+            skips_sup = [x]
 
-          n_sup = x_sup
+            n_sup = self.leaky(self.enc0_opt(x))
+            n_sup = self.leaky(self.enc1_opt(n_sup))
+            n_sup = self.pool(n_sup)
+            skips_sup.append(n_sup)
 
-          n_sup = self.leaky(self.enc0_opt(n_sup))
-          n_sup = self.leaky(self.enc1_opt(n_sup))
-          n_sup = self.pool(n_sup)
-          skips_sup.append(n_sup)
+            n_sup = self.leaky(self.enc2_opt(n_sup))
+            n_sup = self.pool(n_sup)
+            skips_sup.append(n_sup)
 
-          n_sup = self.leaky(self.enc2_opt(n_sup))
-          n_sup = self.pool(n_sup)
-          skips_sup.append(n_sup)
+            n_sup = self.leaky(self.enc3_opt(n_sup))
+            n_sup = self.pool(n_sup)
+            skips_sup.append(n_sup)
 
-          n_sup = self.leaky(self.enc3_opt(n_sup))
-          n_sup = self.pool(n_sup)
-          skips_sup.append(n_sup)
+            n_sup = self.leaky(self.enc4_opt(n_sup))
+            n_sup = self.pool(n_sup)
+            skips_sup.append(n_sup)
 
-          n_sup = self.leaky(self.enc4_opt(n_sup))
-          n_sup = self.pool(n_sup)
-          skips_sup.append(n_sup)
+            n_sup = self.leaky(self.enc5_opt(n_sup))
+            n_sup = self.pool(n_sup)
+            n_sup = self.leaky(self.enc6_opt(n_sup))
 
-          n_sup = self.leaky(self.enc5_opt(n_sup))
-          n_sup = self.pool(n_sup)
-          n_sup = self.leaky(self.enc6_opt(n_sup))
-
-          # COMBINE
-          n = n_SAR + n_sup
+        # ----------------------------------
+        # Combine outputs from both encoders
+        # ----------------------------------
+        if self.method == 'SAR':
+            n = n_SAR
         else:
-          n = n_SAR
+            n = n_SAR + n_sup
 
+        # -------
+        # Decoder
+        # -------
+        def get_skips():
+            """Get current skip connections."""
+            if self.method != 'SAR':
+                skips = skips_SAR.pop() + skips_sup.pop()
+            else:
+                skips = skips_SAR.pop()
+            return skips
+        
 
-        ############################################################################################################
-
-
-        # DECODER
         n = self.upscale2d(n)
-        if self.method != 'SAR':
-          skips = skips_SAR.pop()+ skips_sup.pop()
-        else:
-          skips = skips_SAR.pop()
+        skips = get_skips()
         n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec5(n))
         n = self.leaky(self.dec5b(n))
 
         n = self.upscale2d(n)
-        if self.method != 'SAR':
-          skips = skips_SAR.pop()+ skips_sup.pop()
-        else:
-          skips = skips_SAR.pop()
+        skips = get_skips()
         n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec4(n))
         n = self.leaky(self.dec4b(n))
 
         n = self.upscale2d(n)
-        if self.method != 'SAR':
-          skips = skips_SAR.pop()+ skips_sup.pop()
-        else:
-          skips = skips_SAR.pop()
+        skips = get_skips()
         n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec3(n))
         n = self.leaky(self.dec3b(n))
 
         n = self.upscale2d(n)
-        if self.method != 'SAR':
-          skips = skips_SAR.pop()+ skips_sup.pop()
-        else:
-          skips = skips_SAR.pop()
+        skips = get_skips()
         n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec2(n))
         n = self.leaky(self.dec2b(n))
 
         n = self.upscale2d(n)
-        if self.method != 'SAR':
-          skips = skips_SAR.pop()+ skips_sup.pop()
-        else:
-          skips = skips_SAR.pop()
+        skips = get_skips()
         n = torch.cat((n, skips), dim=1)
         n = self.leaky(self.dec1a(n))
         n = self.leaky(self.dec1b(n))
 
         n = self.dec1(n)
 
-        return x_SAR-n
+        return x - n
 
-    def loss_function(self,output,target,batch_size):
-      """ Defines and runs the loss function
+    def loss_function(self, output, target, batch_size):
+        """Computes the loss function.
 
-      Parameters
-      ----------
-      output :
-      target :
-      batch_size :
+        Parameters
+        ----------
+        output :
+        target :
+        batch_size :
 
-      Returns
-      ----------
-      loss: float
-          The value of loss given your output, target and batch_size
+        Returns
+        ----------
+        loss: float
+        """
+        log_hat_R = 2 * (output * (M - m) + m)
+        hat_R = torch.exp(log_hat_R) + 1e-6  # must be nonzero
+        b_square = torch.square(target)
+        loss = (1 / batch_size) * torch.mean(0.5 * log_hat_R + b_square / hat_R)
+        return loss
 
-      """
-      # ----- loss -----
-      M = 10.089038980848645
-      m = -1.429329123112601
-      # ----- loss -----
-      log_hat_R = 2*(output*(M-m)+m)
-      hat_R = torch.exp(log_hat_R)+1e-6 # must be nonzero
-      b_square = torch.square(target)
-      loss = (1/batch_size)*torch.mean( 0.5*log_hat_R+b_square/hat_R  ) #+ tf.losses.get_regularization_loss()
-      return loss
+    def training_step(self, batch, batch_number):
+        """Train the model with the training set
 
-    def training_step(self, batch,batch_number):
+        Parameters
+        ----------
+        batch : a subset of the training date
+        batch_number : ID identifying the batch
 
-      """ Train the model with the training set
+        Returns
+        -------
+        loss : float
+          The value of loss given the batch
+        """
+        x, y, im = batch
+        x = x.to(self.device)
+        y = y.to(self.device)
+        im = im.to(self.device)
 
-      Parameters
-      ----------
-      batch : a subset of the training date
-      batch_number : ID identifying the batch
-
-      Returns
-      -------
-      loss : float
-        The value of loss given the batch
-
-      """
-      M = 10.089038980848645
-      m = -1.429329123112601
-
-      x, y, im = batch
-      x=x.to(self.device)
-      y=y.to(self.device)
-      im=im.to(self.device)
-
-
-      if (batch_number%2==0):
-        x=(torch.log(torch.square(x)+1e-3)-2*m)/(2*(M-m))
-        if self.method == 'SAR':
-          out = self.forward(torch.unsqueeze(x,-1),self.batch_size)
+        # Depending on the batch number, we predict either the imaginary part from the real part or
+        # the real part from the imaginary part.
+        if batch_number % 2 == 0:
+            known, to_predict = x, y
         else:
-          out = self.forward(torch.cat((torch.unsqueeze(x,-1),im),-1) ,self.batch_size)
-        loss = self.loss_function(out, y,self.batch_size)
+            known, to_predict = y, x
 
-      else:
-        y=(torch.log(torch.square(y)+1e-3)-2*m)/(2*(M-m))
-        if self.method == 'SAR':
-          out = self.forward(torch.unsqueeze(y,-1),self.batch_size)
-        else:
-          out = self.forward(torch.cat((torch.unsqueeze(y,-1),im),-1),self.batch_size)
-        loss = self.loss_function(out,x,self.batch_size)
+        input = (torch.log(torch.square(known) + 1e-3) - 2 * m) / (2 * (M - m))
+        input = torch.unsqueeze(input, -1)
 
-      return loss
+        if self.method != 'SAR':
+            input = torch.cat((input, im), -1)
+
+        out = self.forward(input, self.batch_size)
+        loss = self.loss_function(out, to_predict, self.batch_size)
+
+        return loss
+
 
     def validation_step(self, batch,image_num,epoch_num,eval_files,eval_set,sample_dir):
       """ Test the model with the validation set
