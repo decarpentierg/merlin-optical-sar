@@ -75,7 +75,7 @@ class GenerateDataset():
         if method == 'SAR+SAR' or method == 'SAR+OPT' :
             n_channels += 1
         if method == 'SAR+OPT+SAR':
-            n_channels += 1
+            n_channels += 2
         count = 0
         filepaths = glob.glob(src_dir + '/*.npy')
         print("number of training data %d" % len(filepaths))

@@ -44,7 +44,7 @@ class AE(torch.nn.Module):
         self.method = method
 
         # Compute number of auxiliary channels to add, depending on the chosen method
-        self.n_channels_sup = {'SAR+OPT': 1, 'SAR+SAR': 2, 'SAR+OPT+SAR': 3}[method]
+        self.n_channels_sup = {'SAR':0, 'SAR+OPT': 1, 'SAR+SAR': 1, 'SAR+OPT+SAR': 2}[method]
         
         # ------------
         # Build layers
@@ -85,7 +85,10 @@ class AE(torch.nn.Module):
         self.dec3b = torch.nn.Conv2d(in_channels=96, out_channels=96, **conv_kwargs)
         self.dec2 = torch.nn.Conv2d(in_channels=144, out_channels=96, **conv_kwargs)
         self.dec2b = torch.nn.Conv2d(in_channels=96, out_channels=96, **conv_kwargs)
-        self.dec1a = torch.nn.Conv2d(in_channels=97, out_channels=64, **conv_kwargs)
+        if self.method != 'SAR+OPT+SAR':
+            self.dec1a = torch.nn.Conv2d(in_channels=97, out_channels=64, **conv_kwargs)
+        else:
+            self.dec1a = torch.nn.Conv2d(in_channels=98, out_channels=64, **conv_kwargs)
         self.dec1b = torch.nn.Conv2d(in_channels=64, out_channels=32, **conv_kwargs)
         self.dec1 = torch.nn.Conv2d(in_channels=32, out_channels=1, **conv_kwargs)
 
@@ -106,16 +109,16 @@ class AE(torch.nn.Module):
         a numpy array containing the denoised image i.e the image itself minus the noise
         """
         # Reshape input
-        x = torch.reshape(x[:, :, :, :, 0], [batch_size, 1, 256, 256])
+        x_SAR = torch.reshape(x[:, :, :, :, 0], [batch_size, 1, 256, 256])
 
         # ------------
         # Main encoder
         # ------------
 
         # List for skip connections
-        skips_SAR = [x]
+        skips_SAR = [x_SAR]
 
-        n_SAR = self.leaky(self.enc0(x))
+        n_SAR = self.leaky(self.enc0(x_SAR))
         n_SAR = self.leaky(self.enc1(n_SAR))
         n_SAR = self.pool(n_SAR)
         skips_SAR.append(n_SAR)
@@ -141,10 +144,11 @@ class AE(torch.nn.Module):
         # -----------------
 
         if self.method != 'SAR':
-            # List for skip connections
-            skips_sup = [x]
+            # List for skip 
+            x_sup = torch.reshape(x[:, :, :,:, 1:], [batch_size, self.n_channels_sup, 256, 256])
+            skips_sup = [x_sup]
 
-            n_sup = self.leaky(self.enc0_opt(x))
+            n_sup = self.leaky(self.enc0_opt(x_sup))
             n_sup = self.leaky(self.enc1_opt(n_sup))
             n_sup = self.pool(n_sup)
             skips_sup.append(n_sup)
@@ -217,7 +221,7 @@ class AE(torch.nn.Module):
 
         n = self.dec1(n)
 
-        return x - n
+        return x_SAR - n
 
     def loss_function(self, output, target, batch_size):
         """Computes the loss function.
