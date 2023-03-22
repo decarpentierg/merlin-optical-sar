@@ -4,7 +4,7 @@ import argparse
 from glob import glob
 import os
 from pathlib import Path
-
+import time
 import numpy as np
 import torch
 
@@ -14,7 +14,7 @@ from utils import *
 
 ROOT_DIR = Path(__file__).parent.parent.absolute().as_posix()  # get path to project root
 basedir = ROOT_DIR + '/MERLIN'
-datasetdir = ROOT_DIR + '/dataset_Saclay_SAR'
+datasetdir = '..' + '/dataset_Saclay_SAR+SAR'
 
 torch.manual_seed(2)
 
@@ -44,7 +44,6 @@ parser.add_argument('--device', dest='device', default=torch.device("cuda:0" if 
 parser.add_argument('--method', dest='method', default='SAR', help='method to use : SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR')
 
 args = parser.parse_args()
-
 if args.method != 'SAR' and args.method != 'SAR+OPT' and args.method != 'SAR+SAR' and args.method != 'SAR+OPT+SAR':
     raise ValueError('Method must be either SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR')
 
