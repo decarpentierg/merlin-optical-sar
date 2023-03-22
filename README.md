@@ -1,4 +1,6 @@
 # merlin-optical-sar
+[![Code style: black](https://img.shields.io/badge/code%20style-black-000000.svg)](https://github.com/psf/black)
+
 Combining SAR and optical data for speckle reduction
 
 ## References
