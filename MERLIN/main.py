@@ -8,9 +8,9 @@ import time
 import numpy as np
 import torch
 
-from Dataset import *
-from model import *
-from utils import *
+from Dataset import Dataset, ValDataset
+from model import AE
+from utils import load_train_data, save_checkpoint, save_model, init_weights
 
 ROOT_DIR = Path(__file__).parent.parent.absolute().as_posix()  # get path to project root
 basedir = ROOT_DIR + "/MERLIN"
@@ -119,12 +119,7 @@ parser.add_argument(
 )
 
 args = parser.parse_args()
-if (
-    args.method != "SAR"
-    and args.method != "SAR+OPT"
-    and args.method != "SAR+SAR"
-    and args.method != "SAR+OPT+SAR"
-):
+if args.method not in ["SAR", "SAR+OPT", "SAR+SAR", "SAR+OPT+SAR"]:
     raise ValueError("Method must be either SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR")
 
 torch.autograd.set_detect_anomaly(True)

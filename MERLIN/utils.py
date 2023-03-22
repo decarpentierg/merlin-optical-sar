@@ -1,23 +1,19 @@
-import gc
 import os
-import sys
 import torch
 
 import numpy as np
 from PIL import Image
 from scipy import special
 from scipy import signal
-import matplotlib.pyplot as plt
-from glob import glob
 from GenerateDataset import GenerateDataset
 
 
 # DEFINE PARAMETERS OF SPECKLE AND NORMALIZATION FACTOR
-M = 10.089038980848645
-m = -1.429329123112601
+MAX = 10.089038980848645
+MIN = -1.429329123112601
 L = 1
 c = (1 / 2) * (special.psi(L) - np.log(L))
-cn = c / (M - m)  # normalized (0,1) mean of log speckle
+cn = c / (MAX - MIN)  # normalized (0,1) mean of log speckle
 
 
 def symetrisation_patch(ima):
@@ -74,65 +70,12 @@ def symetrisation_patch(ima):
     return np.concatenate((np.stack((np.real(ima2), np.imag(ima2)), axis=2), sup), axis=2)
 
 
-def symetrisation_patch_test(real_part, imag_part):
-    S = np.fft.fftshift(np.fft.fft2(real_part[0, :, :, 0] + 1j * imag_part[0, :, :, 0]))
-    p = np.zeros((S.shape[0]))  # azimut (ncol)
-    for i in range(S.shape[0]):
-        p[i] = np.mean(np.abs(S[i, :]))
-    sp = p[::-1]
-    c = np.real(np.fft.ifft(np.fft.fft(p) * np.conjugate(np.fft.fft(sp))))
-    d1 = np.unravel_index(c.argmax(), p.shape[0])
-    d1 = d1[0]
-    shift_az_1 = int(round(-(d1 - 1) / 2)) % p.shape[0] + int(p.shape[0] / 2)
-    p2_1 = np.roll(p, shift_az_1)
-    shift_az_2 = int(round(-(d1 - 1 - p.shape[0]) / 2)) % p.shape[0] + int(p.shape[0] / 2)
-    p2_2 = np.roll(p, shift_az_2)
-    window = signal.gaussian(p.shape[0], std=0.2 * p.shape[0])
-    test_1 = np.sum(window * p2_1)
-    test_2 = np.sum(window * p2_2)
-    # make sure the spectrum is symetrized and zeo-Doppler centered
-    if test_1 >= test_2:
-        p2 = p2_1
-        shift_az = shift_az_1 / p.shape[0]
-    else:
-        p2 = p2_2
-        shift_az = shift_az_2 / p.shape[0]
-    S2 = np.roll(S, int(shift_az * p.shape[0]), axis=0)
-
-    q = np.zeros((S.shape[1]))  # range (nlin)
-    for j in range(S.shape[1]):
-        q[j] = np.mean(np.abs(S[:, j]))
-    sq = q[::-1]
-    # correlation
-    cq = np.real(np.fft.ifft(np.fft.fft(q) * np.conjugate(np.fft.fft(sq))))
-    d2 = np.unravel_index(cq.argmax(), q.shape[0])
-    d2 = d2[0]
-    shift_range_1 = int(round(-(d2 - 1) / 2)) % q.shape[0] + int(q.shape[0] / 2)
-    q2_1 = np.roll(q, shift_range_1)
-    shift_range_2 = int(round(-(d2 - 1 - q.shape[0]) / 2)) % q.shape[0] + int(q.shape[0] / 2)
-    q2_2 = np.roll(q, shift_range_2)
-    window_r = signal.gaussian(q.shape[0], std=0.2 * q.shape[0])
-    test_1 = np.sum(window_r * q2_1)
-    test_2 = np.sum(window_r * q2_2)
-    if test_1 >= test_2:
-        q2 = q2_1
-        shift_range = shift_range_1 / q.shape[0]
-    else:
-        q2 = q2_2
-        shift_range = shift_range_2 / q.shape[0]
-
-    Sf = np.roll(S2, int(shift_range * q.shape[0]), axis=1)
-    ima2 = np.fft.ifft2(np.fft.ifftshift(Sf))
-    ima2 = ima2.reshape(1, np.size(ima2, 0), np.size(ima2, 1), 1)
-    return np.real(ima2), np.imag(ima2)
-
-
 def normalize_sar(im):
-    return ((np.log(im + 1e-6) - m) / (M - m)).astype(np.float32)
+    return ((np.log(im + 1e-6) - MIN) / (MAX - MIN)).astype(np.float32)
 
 
 def denormalize_sar(im):
-    return np.exp((np.clip(np.squeeze(im), 0, 1)) * (M - m) + m)
+    return np.exp((np.clip(np.squeeze(im), 0, 1)) * (MAX - MIN) + MIN)
 
 
 def load_train_data(
@@ -213,116 +156,10 @@ def save_sar_images(denoised, noisy, imagename, save_dir, groundtruth=None):
     store_data_and_plot(noisy, threshold, noisyfilename)
 
 
-def save_real_imag_images(real_part, imag_part, imagename, save_dir):
-    choices = {
-        "marais1": 190.92,
-        "marais2": 168.49,
-        "saclay": 470.92,
-        "lely": 235.90,
-        "ramb": 167.22,
-        "risoul": 306.94,
-        "limagne": 178.43,
-        "saintgervais": 560,
-        "Serreponcon": 450.0,
-        "Sendai": 600.0,
-        "Paris": 1291.0,
-        "Berlin": 1036.0,
-        "Bergen": 553.71,
-        "SDP_Lambesc": 349.53,
-        "Grand_Canyon": 287.0,
-        "Brazil": 103.0,
-    }
-    threshold = None
-    for x in choices:
-        if x in imagename:
-            threshold = choices.get(x)
-    if threshold is None:
-        threshold = np.mean(imag_part) + 3 * np.std(imag_part)
-
-    realfilename = save_dir + "/denoised_real_" + imagename
-    np.save(realfilename, real_part)
-    store_data_and_plot(real_part, threshold, realfilename)
-
-    imagfilename = save_dir + "/denoised_imag_" + imagename
-    np.save(imagfilename, imag_part)
-    store_data_and_plot(imag_part, threshold, imagfilename)
-
-
-def save_real_imag_images_noisy(real_part, imag_part, imagename, save_dir):
-    choices = {
-        "marais1": 190.92,
-        "marais2": 168.49,
-        "saclay": 470.92,
-        "lely": 235.90,
-        "ramb": 167.22,
-        "risoul": 306.94,
-        "limagne": 178.43,
-        "saintgervais": 560,
-        "Serreponcon": 450.0,
-        "Sendai": 600.0,
-        "Paris": 1291.0,
-        "Berlin": 1036.0,
-        "Bergen": 553.71,
-        "SDP_Lambesc": 349.53,
-        "Grand_Canyon": 287.0,
-        "Brazil": 103.0,
-    }
-    threshold = None
-    for x in choices:
-        if x in imagename:
-            threshold = choices.get(x)
-    if threshold is None:
-        threshold = np.mean(np.abs(imag_part)) + 3 * np.std(np.abs(imag_part))
-
-    realfilename = save_dir + "/noisy_real_" + imagename
-    np.save(realfilename, real_part)
-    store_data_and_plot(np.sqrt(2) * np.abs(real_part), threshold, realfilename)
-
-    imagfilename = save_dir + "/noisy_imag_" + imagename
-    np.save(imagfilename, imag_part)
-    store_data_and_plot(np.sqrt(2) * np.abs(imag_part), threshold, imagfilename)
-
-
-def save_segmented_image(out_probs, imagename, sample_dir):
-    segmentation_filename = sample_dir + "/Segmentation_" + imagename
-    np.save(segmentation_filename, out_probs)
-    threshold_seg = 0.5
-    out_probs[out_probs < threshold_seg] = 0
-    out_probs[out_probs >= threshold_seg] = 255
-    store_data_and_plot(out_probs, 255, segmentation_filename)
-
-
-def save_groundtruth_samples(y, l, imagename, sample_dir):
-    threshold = 8000.0
-    store_data_and_plot(y, threshold, sample_dir + "/SAR_" + imagename)
-    store_data_and_plot(255 * l, 255, sample_dir + "/Groundtruth_" + imagename)
-
-
-def save_residual(filepath, residual):
-    residual_image = np.squeeze(residual)
-    plt.imsave(filepath, residual_image)
-
-
-def cal_psnr(Shat, S):
-    # takes amplitudes in input
-    # Shat: a SAR amplitude image
-    # S:    a reference SAR image
-    P = np.quantile(S, 0.99)
-    res = 10 * np.log10((P**2) / np.mean(np.abs(Shat - S) ** 2))
-    return res
-
-
 def init_weights(m):
     if type(m) == torch.nn.Linear:
         torch.nn.init.xavier_normal_(m.weight, gain=2.0)
         print("[*] inizialized weights")
-
-
-def evaluate(model, loader):
-    outputs = [model.validation_step(batch) for batch in loader]
-    outputs = torch.tensor(outputs).T
-    loss, accuracy = torch.mean(outputs, dim=1)
-    return {"loss": loss.item(), "accuracy": accuracy.item()}
 
 
 def save_model(model, destination_folder):
