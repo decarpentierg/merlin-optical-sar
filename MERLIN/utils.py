@@ -3,17 +3,13 @@ import torch
 
 import numpy as np
 from PIL import Image
-from scipy import special
 from scipy import signal
-from GenerateDataset import GenerateDataset
+from generate_dataset import GenerateDataset
 
 
 # DEFINE PARAMETERS OF SPECKLE AND NORMALIZATION FACTOR
 MAX = 10.089038980848645
 MIN = -1.429329123112601
-L = 1
-c = (1 / 2) * (special.psi(L) - np.log(L))
-cn = c / (MAX - MIN)  # normalized (0,1) mean of log speckle
 
 
 def symetrisation_patch(ima):

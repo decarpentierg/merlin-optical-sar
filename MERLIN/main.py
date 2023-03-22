@@ -1,5 +1,3 @@
-#!/usr/bin/env python
-# -*- coding: utf-8 -*-
 import argparse
 from glob import glob
 import os
@@ -8,7 +6,7 @@ import time
 import numpy as np
 import torch
 
-from Dataset import Dataset, ValDataset
+from dataset import Dataset, ValDataset
 from model import AE
 from utils import load_train_data, save_checkpoint, save_model, init_weights
 
