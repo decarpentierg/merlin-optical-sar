@@ -2,24 +2,31 @@ import numpy as np
 import torch
 from glob import glob
 
-from utils import symetrisation_patch
+from utils import symmetrization_patch
 
 
 class Dataset(torch.utils.data.Dataset):
-    "characterizes a dataset for pytorch"
+    """Dataset
+    
+    Attributes
+    ----------
+    patches: ndarray of shape (number of patches, dim_x, dim_y, n_channels)
+        Patches
+    
+    method: str. Either SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR
+        Method
+    """
 
-    def __init__(self, patche, method):
-        self.patches = patche
+    def __init__(self, patches, method):
+        self.patches = patches
         self.method = method
-        # self.patches_MR = patches_MR
-        # self.patches_CT = patches_CT
 
     def __len__(self):
-        "denotes the total number of samples"
+        """Total number of patches."""
         return len(self.patches)
 
     def __getitem__(self, index):
-        "Generates one sample of data"
+        """Generates one sample of data"""
         # select sample
         batch_real = self.patches[index, :, :, 0]
         batch_imag = self.patches[index, :, :, 1]
@@ -75,7 +82,7 @@ class ValDataset(torch.utils.data.Dataset):
                 )
         current_test = eval_data[index]
 
-        current_test[0, :, :, :] = symetrisation_patch(current_test[0, :, :, :])
+        current_test[0, :, :, :] = symmetrization_patch(current_test[0, :, :, :])
         image_real_part = (current_test[:, :, :, 0]).reshape(
             current_test.shape[0], current_test.shape[1], current_test.shape[2], 1
         )

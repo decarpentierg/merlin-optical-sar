@@ -316,7 +316,7 @@ def denoiser_test(model):
     val_losses = []
     ckpt_files = glob(args.ckpt_dir + "/checkpoint_*")
     if len(ckpt_files) == 0:
-        print("[*] Not find pre-trained model! ")
+        print("[*] Pre-trained model not found!")
         return None
 
     else:

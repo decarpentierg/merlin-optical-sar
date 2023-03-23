@@ -10,7 +10,7 @@ The code scans among the training images and then for data_aug_times
 
 
 class GenerateDataset:
-    def symetrisation_patch_gen(self, ima):
+    def symmetrization_patch_gen(self, ima):
         sup = ima[:, :, 2:]
         ima = ima[:, :, :2]
         S = np.fft.fftshift(np.fft.fft2(ima[:, :, 0] + 1j * ima[:, :, 1]))
@@ -117,7 +117,7 @@ class GenerateDataset:
             im_w = np.size(img, 1)
             for x in range(0 + step, im_h - pat_size, stride):
                 for y in range(0 + step, im_w - pat_size, stride):
-                    inputs[count, :, :, :] = self.symetrisation_patch_gen(
+                    inputs[count, :, :, :] = self.symmetrization_patch_gen(
                         img_s[x : x + pat_size, y : y + pat_size, :n_channels]
                     )
                     count += 1

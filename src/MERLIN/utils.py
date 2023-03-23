@@ -12,7 +12,7 @@ MAX = 10.089038980848645
 MIN = -1.429329123112601
 
 
-def symetrisation_patch(ima):
+def symmetrization_patch(ima):
     sup = ima[:, :, 2:]
     ima = ima[:, :, :2]
     S = np.fft.fftshift(np.fft.fft2(ima[:, :, 0] + 1j * ima[:, :, 1]))
