@@ -10,14 +10,19 @@ from dataset import Dataset, ValDataset
 from model import AE
 from utils import load_train_data, save_checkpoint, save_model, init_weights
 
-ROOT_DIR = Path(__file__).parent.parent.absolute().as_posix()  # get path to project root
-basedir = ROOT_DIR + "/MERLIN"
-datasetdir = ".." + "/dataset_Saclay_SAR+SAR"
+ROOT_DIR = Path(__file__).parent.parent.parent.absolute().as_posix()  # get path to project root
+resultsdir = ROOT_DIR + "/results"
+datasetdir = ROOT_DIR + "/data"
 
 torch.manual_seed(2)
 
+# ---------------
+# Parse arguments
+# ---------------
+
 parser = argparse.ArgumentParser(description="")
-parser.add_argument("--epoch", dest="epoch", type=int, default=30, help="# of epoch")
+
+# Batches and patches
 parser.add_argument(
     "--batch_size", dest="batch_size", type=int, default=12, help="# images in batch"
 )
@@ -28,7 +33,6 @@ parser.add_argument(
     default=1,
     help="# images in batch",
 )
-
 parser.add_argument(
     "--patch_size", dest="patch_size", type=int, default=256, help="# size of a patch"
 )
@@ -46,6 +50,9 @@ parser.add_argument(
     default=1,
     help="# data aug techniques",
 )
+
+# Optimizer
+parser.add_argument("--epoch", dest="epoch", type=int, default=30, help="# of epoch")
 parser.add_argument(
     "--lr", dest="lr", type=float, default=0.001, help="initial learning rate for adam"
 )
@@ -57,50 +64,13 @@ parser.add_argument(
     help="weight decay for adam",
 )
 
+# GPU or CPU
 parser.add_argument(
     "--use_gpu",
     dest="use_gpu",
     type=int,
     default=1,
     help="gpu flag, 1 for GPU and 0 for CPU",
-)
-parser.add_argument("--phase", dest="phase", default="train", help="train or test")
-parser.add_argument(
-    "--checkpoint_dir",
-    dest="ckpt_dir",
-    default=basedir + "/saved_model",
-    help="models are saved here",
-)
-
-parser.add_argument(
-    "--sample_dir",
-    dest="sample_dir",
-    default=basedir + "/sample",
-    help="sample are saved here",
-)
-parser.add_argument(
-    "--test_dir",
-    dest="test_dir",
-    default=basedir + "/test",
-    help="test sample are saved here",
-)
-parser.add_argument(
-    "--eval_set",
-    dest="eval_set",
-    default=datasetdir + "/validation/spotlight/",
-    help="dataset for eval in training",
-)
-parser.add_argument(
-    "--test_set",
-    dest="test_set",
-    default=datasetdir + "/validation/spotlight/",
-    help="dataset for testing",
-)
-parser.add_argument(
-    "--training_set",
-    dest="training_set",
-    default=datasetdir + "/train/spotlight/",
-    help="dataset for training",
 )
 parser.add_argument(
     "--device",
@@ -109,6 +79,33 @@ parser.add_argument(
     help="gpu or cpu",
 )
 
+# Test or train
+parser.add_argument("--phase", dest="phase", default="train", help="train or test")
+
+# Directories
+parser.add_argument(
+    "--checkpoint_dir",
+    dest="ckpt_dir",
+    default=resultsdir + "/saved_model",
+    help="models are saved here",
+)
+parser.add_argument(
+    "--sample_dir",
+    dest="sample_dir",
+    default=resultsdir + "/sample",
+    help="sample are saved here",
+)
+parser.add_argument(
+    "--test_dir",
+    dest="test_dir",
+    default=resultsdir + "/test",
+    help="test sample are saved here",
+)
+
+# Dataset and method
+parser.add_argument(
+    "--dataset", dest="dataset", default="Saclay", help="dataset to use : Saclay or Sendai"
+)
 parser.add_argument(
     "--method",
     dest="method",
@@ -120,8 +117,13 @@ args = parser.parse_args()
 if args.method not in ["SAR", "SAR+OPT", "SAR+SAR", "SAR+OPT+SAR"]:
     raise ValueError("Method must be either SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR")
 
-torch.autograd.set_detect_anomaly(True)
+TRAINING_SET = f"{datasetdir}/{args.dataset}_{args.method}/train/spotlight/"
+TEST_SET = f"{datasetdir}/{args.dataset}_{args.method}/validation/spotlight/"
+EVAL_SET = f"{datasetdir}/{args.dataset}_{args.method}/validation/spotlight/"
 
+# ----------------
+# Define functions
+# ----------------
 
 def fit(
     model,
@@ -149,18 +151,19 @@ def fit(
     ----------
     self : object
       Fitted estimator.
-
     """
 
     train_losses = []
     val_losses = []
     history = {}
+
+    # Initialize weights
     ckpt_files = glob(checkpoint_folder + "/checkpoint_*")
     if len(ckpt_files) == 0:
         epoch_num = 0
         model.apply(init_weights)
         loss = 0.0
-        print("[*] Not find pre-trained model! Start training froms scratch")
+        print("[*] Pre-trained model not found! Starting training from scratch.")
     else:
         max_file = max(ckpt_files, key=os.path.getctime)
         checkpoint = torch.load(max_file)
@@ -170,9 +173,9 @@ def fit(
         optimizer = torch.optim.Adam(model.parameters(), lr=lr_list[epoch_num - 1])
         optimizer.load_state_dict(checkpoint["optimizer_state_dict"])
         loss = checkpoint["loss"]
-
         print("[*] Model restored! Resume training from latest checkpoint at " + max_file)
 
+    # Compute validation loss
     with torch.no_grad():
         image_num = 0
         for batch in val_loader:
@@ -181,17 +184,18 @@ def fit(
             )
             image_num = image_num + 1
 
+    # Start training
     start_time = time.time()
     for epoch in range(epoch_num, epochs):
         epoch_num = epoch_num + 1
         print("\nEpoch", epoch_num)
         print("\nLearning rate", lr_list[epoch])
         print("\nGradient norm", gn_list[epoch])
-        print("***************** \n")
+        print("*****************\n")
         optimizer = torch.optim.Adam(model.parameters(), lr=lr_list[epoch])
 
-        # Train
-        for i, batch in enumerate(train_loader, 0):
+        # Run one epoch
+        for i, batch in enumerate(train_loader):
             running_loss = 0.0
 
             optimizer.zero_grad()
@@ -203,7 +207,7 @@ def fit(
             total_norm = 0
             for p in model.parameters():
                 param_norm = p.grad.detach().data.norm(2)
-                total_norm += param_norm.item() ** 2
+                total_norm += param_norm.item()**2
             total_norm = total_norm**0.5
             print(total_norm)
 
@@ -211,7 +215,7 @@ def fit(
 
             optimizer.step()
 
-            # running_loss += loss.item()     # extract the loss value
+            running_loss += loss.item()     # extract the loss value
             print(
                 "[%d, %5d] time: %4.4f, loss: %.3f"
                 % (epoch_num, i + 1, time.time() - start_time, loss)
@@ -219,7 +223,10 @@ def fit(
             # zero the loss
             running_loss = 0.0
 
+        # save current checkpoint
         save_checkpoint(model, checkpoint_folder, epoch_num, optimizer, loss)
+
+        # Compute validation loss
         with torch.no_grad():
             image_num = 0
             for batch in val_loader:
@@ -228,13 +235,8 @@ def fit(
                 )
                 image_num = image_num + 1
 
-                # val_losses.append(val_loss)
-
-        # print('For epoch', epoch+1,'the last validation loss is :',val_losses)
-
     history["train_loss"] = train_losses
     history["validation_loss"] = val_losses
-    # save current checkpoint
 
     return history
 
@@ -254,7 +256,7 @@ def denoiser_train(model, lr_list, gn_list):
     """
     # Prepare train DataLoader
     train_data = load_train_data(
-        args.training_set,
+        TRAINING_SET,
         args.patch_size,
         args.batch_size,
         args.stride_size,
@@ -268,11 +270,11 @@ def denoiser_train(model, lr_list, gn_list):
     )
 
     # Prepare Validation DataLoader
-    eval_dataset = ValDataset(args.eval_set, args.method)  # range [0; 1]
+    eval_dataset = ValDataset(EVAL_SET, args.method)  # range [0; 1]
     eval_loader = torch.utils.data.DataLoader(
         eval_dataset, batch_size=args.val_batch_size, shuffle=False, drop_last=True
     )
-    eval_files = glob(args.eval_set + "*.npy")
+    eval_files = glob(EVAL_SET + "*.npy")
 
     # Train the model
     history = fit(
@@ -283,7 +285,7 @@ def denoiser_train(model, lr_list, gn_list):
         lr_list,
         gn_list,
         eval_files,
-        args.eval_set,
+        EVAL_SET,
         args.ckpt_dir,
     )
 
@@ -305,11 +307,11 @@ def denoiser_test(model):
 
     """
     # Prepare Validation DataLoader
-    test_dataset = ValDataset(args.test_set, args.method)  # range [0; 1]
+    test_dataset = ValDataset(TEST_SET, args.method)  # range [0; 1]
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.val_batch_size, shuffle=False, drop_last=True
     )
-    test_files = glob(args.test_set + "*.npy")
+    test_files = glob(TEST_SET + "*.npy")
 
     val_losses = []
     ckpt_files = glob(args.ckpt_dir + "/checkpoint_*")
@@ -329,7 +331,7 @@ def denoiser_test(model):
             image_num = 0
             for batch in test_loader:
                 print(image_num)
-                model.test_step(batch, image_num, test_files, args.test_set, args.test_dir)
+                model.test_step(batch, image_num, test_files, TEST_SET, args.test_dir)
                 image_num = image_num + 1
 
 
@@ -355,9 +357,12 @@ def main():
     elif args.phase == "test":
         denoiser_test(model)
     else:
-        print("[!]Unknown phase")
+        print("[!] Unknown phase")
         exit(0)
 
+# --------
+# Run main
+# --------
 
 if __name__ == "__main__":
     main()
