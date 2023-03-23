@@ -63,7 +63,7 @@ for i in range(sar_no_register.shape[-1]):
 # Create directory
 # ----------------
 
-folder_name = ROOT_DIR + f"/{args.dataset}_{args.method}"
+folder_name = ROOT_DIR + f"/data/{args.dataset}_{args.method}"
 if not os.path.exists(folder_name):
     os.mkdir(folder_name)
     os.mkdir(folder_name + "/train")
