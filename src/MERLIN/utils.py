@@ -4,7 +4,6 @@ import torch
 import numpy as np
 from PIL import Image
 from scipy import signal
-from generate_dataset import generate_patches
 
 
 # DEFINE PARAMETERS OF SPECKLE AND NORMALIZATION FACTOR
@@ -72,23 +71,6 @@ def normalize_sar(im):
 
 def denormalize_sar(im):
     return np.exp((np.clip(np.squeeze(im), 0, 1)) * (MAX - MIN) + MIN)
-
-
-def load_train_data(
-    filepath, patch_size, batch_size, stride_size, n_data_augmentation, method
-):
-    """Proxy for generate_dataset.generate_patches
-    """
-    imgs = generate_patches(
-        data_dir=filepath,
-        pat_size=patch_size,
-        step=0,
-        stride=stride_size,
-        bat_size=batch_size,
-        data_aug_times=n_data_augmentation,
-        method=method,
-    )
-    return imgs
 
 
 def load_sar_images(filelist):

@@ -60,6 +60,7 @@ def symmetrization_patch_gen(ima):
 
 def generate_patches(
     data_dir,
+    index,
     pat_size=256,
     step=0,
     stride=64,
@@ -67,7 +68,7 @@ def generate_patches(
     data_aug_times=1,
     method="SAR",
 ):
-    """Generate patches from path to directory with .npy files.
+    """Generate patches from directory with .npy files.
 
     Parameters
     ----------
@@ -82,7 +83,7 @@ def generate_patches(
     
     count = 0
 
-    filepaths = glob.glob(data_dir + "/*.npy")
+    filepaths = glob.glob(f"{data_dir}/*{index}.npy")
     print(f"number of training data {len(filepaths)}")
 
     # calculate the number of patches

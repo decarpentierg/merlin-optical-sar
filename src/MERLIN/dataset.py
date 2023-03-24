@@ -65,7 +65,7 @@ class ValDataset(torch.utils.data.Dataset):
         Method
     """
 
-    def __init__(self, test_set, method):
+    def __init__(self, test_set, method, index):
         """Class constructor
 
         Parameters
@@ -75,7 +75,7 @@ class ValDataset(torch.utils.data.Dataset):
         
         method: see class docstring.
         """
-        self.files = glob(test_set + "/*.npy")
+        self.files = glob(f"{test_set}/val_data_{index}*.npy")
         self.method = method
 
     def __len__(self):

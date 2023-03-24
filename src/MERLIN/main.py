@@ -8,7 +8,8 @@ import torch
 
 from dataset import Dataset, ValDataset
 from model import AE
-from utils import load_train_data, save_checkpoint, save_model, init_weights
+from utils import save_checkpoint, save_model, init_weights
+from generate_dataset import generate_patches
 
 ROOT_DIR = Path(__file__).parent.parent.parent.absolute().as_posix()  # get path to project root
 resultsdir = ROOT_DIR + "/results"
@@ -111,6 +112,13 @@ parser.add_argument(
     dest="method",
     default="SAR",
     help="method to use : SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR",
+)
+parser.add_argument(
+    "--index",
+    dest="index",
+    default=0,
+    type=int,
+    help="Index of SAR image to denoise. Either 0, 1 or 2."
 )
 
 args = parser.parse_args()
@@ -250,19 +258,22 @@ def denoiser_train(model, lr_list, gn_list):
     lr_list : list of learning rates
 
     Returns
-    ----------
+    -------
     history : list of both training and validation loss
 
     """
     # Prepare train DataLoader
-    train_data = load_train_data(
+    train_data = generate_patches(
         TRAINING_SET,
+        args.index,
         args.patch_size,
-        args.batch_size,
+        0,
         args.stride_size,
+        args.batch_size,
         args.n_data_augmentation,
-        method=args.method,
-    )  # range [0; 1]
+        args.method
+    )
+
     train_dataset = Dataset(train_data, args.method)
 
     train_loader = torch.utils.data.DataLoader(
@@ -270,11 +281,11 @@ def denoiser_train(model, lr_list, gn_list):
     )
 
     # Prepare Validation DataLoader
-    eval_dataset = ValDataset(EVAL_SET, args.method)  # range [0; 1]
+    eval_dataset = ValDataset(EVAL_SET, args.method, args.index)  # range [0; 1]
     eval_loader = torch.utils.data.DataLoader(
         eval_dataset, batch_size=args.val_batch_size, shuffle=False, drop_last=True
     )
-    eval_files = glob(EVAL_SET + "*.npy")
+    eval_files = glob(EVAL_SET + f"val_data_{args.index}*.npy")
 
     # Train the model
     history = fit(
@@ -303,11 +314,11 @@ def denoiser_test(model):
     denoiser : model as defined in main
 
     Returns
-    ----------
+    -------
 
     """
     # Prepare Validation DataLoader
-    test_dataset = ValDataset(TEST_SET, args.method)  # range [0; 1]
+    test_dataset = ValDataset(TEST_SET, args.method, args.index)  # range [0; 1]
     test_loader = torch.utils.data.DataLoader(
         test_dataset, batch_size=args.val_batch_size, shuffle=False, drop_last=True
     )
