@@ -54,20 +54,36 @@ class Dataset(torch.utils.data.Dataset):
 
 
 class ValDataset(torch.utils.data.Dataset):
-    "characterizes a dataset for pytorch"
+    """Validation dataset
+    
+    Attributes
+    ----------
+    files: list of str
+        Paths to .npy files with validation samples.
+    
+    method: str. Either SAR, SAR+OPT, SAR+SAR or SAR+OPT+SAR
+        Method
+    """
 
     def __init__(self, test_set, method):
+        """Class constructor
+
+        Parameters
+        ----------
+        test_set: str
+            path to directory with validation data
+        
+        method: see class docstring.
+        """
         self.files = glob(test_set + "/*.npy")
         self.method = method
-        # self.patches_MR = patches_MR
-        # self.patches_CT = patches_CT
 
     def __len__(self):
-        "denotes the total number of samples"
+        """Total number of patches."""
         return len(self.files)
 
     def __getitem__(self, index):
-        "Generates one sample of data"
+        """Generates one sample of data"""
         # select sample
         # eval_data = load_sar_images(self.files)
         if not isinstance(self.files, list):
