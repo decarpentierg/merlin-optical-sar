@@ -4,13 +4,28 @@ from scipy import signal
 
 
 def symmetrization_patch_gen(ima):
+    """Apply a translation to the FFT of the main SAR image so as to center its spectrum?
+
+    Arguments
+    ---------
+    ima: ndarray of shape (m, n, n_channels)
+        image to process
+    
+    Returns
+    -------
+    ima2: ndarray of shape (m, n, n_channels)
+        processed image. Only the 2 first channels are processed.
+    """
     sup = ima[:, :, 2:]
     ima = ima[:, :, :2]
+
+    # Take FFT of image
     S = np.fft.fftshift(np.fft.fft2(ima[:, :, 0] + 1j * ima[:, :, 1]))
-    p = np.zeros((S.shape[0]))  # azimut (ncol)
-    for i in range(S.shape[0]):
-        p[i] = np.mean(np.abs(S[i, :]))
+
+    # Azimut (ncol)
+    p = np.mean(np.abs(S), axis=1)
     sp = p[::-1]
+    # correlation
     c = np.real(np.fft.ifft(np.fft.fft(p) * np.conjugate(np.fft.fft(sp))))
     d1 = np.unravel_index(c.argmax(), p.shape[0])
     d1 = d1[0]
@@ -23,16 +38,13 @@ def symmetrization_patch_gen(ima):
     test_2 = np.sum(window * p2_2)
     # make sure the spectrum is symetrized and zeo-Doppler centered
     if test_1 >= test_2:
-        p2 = p2_1
-        shift_az = shift_az_1 / p.shape[0]
+        shift_az = shift_az_1
     else:
-        p2 = p2_2
-        shift_az = shift_az_2 / p.shape[0]
-    S2 = np.roll(S, int(shift_az * p.shape[0]), axis=0)
+        shift_az = shift_az_2
+    S2 = np.roll(S, shift_az, axis=0)
 
-    q = np.zeros((S.shape[1]))  # range (nlin)
-    for j in range(S.shape[1]):
-        q[j] = np.mean(np.abs(S[:, j]))
+    # Range (nlin)
+    q = np.mean(np.abs(S), axis=0)
     sq = q[::-1]
     # correlation
     cq = np.real(np.fft.ifft(np.fft.fft(q) * np.conjugate(np.fft.fft(sq))))
@@ -48,13 +60,11 @@ def symmetrization_patch_gen(ima):
     test_1 = np.sum(window_r * q2_1)
     test_2 = np.sum(window_r * q2_2)
     if test_1 >= test_2:
-        q2 = q2_1
-        shift_range = shift_range_1 / q.shape[0]
+        shift_range = shift_range_1
     else:
-        q2 = q2_2
-        shift_range = shift_range_2 / q.shape[0]
+        shift_range = shift_range_2
 
-    Sf = np.roll(S2, int(shift_range * q.shape[0]), axis=1)
+    Sf = np.roll(S2, shift_range, axis=1)
     ima2 = np.fft.ifft2(np.fft.ifftshift(Sf))
     return np.concatenate((np.stack((np.real(ima2), np.imag(ima2)), axis=2), sup), axis=2)
 
