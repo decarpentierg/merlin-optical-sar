@@ -35,14 +35,14 @@ if args.method not in ["SAR", "SAR+OPT", "SAR+SAR", "SAR+OPT+SAR"]:
 # -----------
 
 if args.dataset == "Saclay":
-    sar_path = "source_data/Saclay/TelecomParisZ4.IMA"
-    opt_path = "source_data/Saclay/TelecomParisOPT.IMA"
+    sar_path = ROOT_DIR + "/source_data/Saclay/TelecomParisZ4.IMA"
+    opt_path = ROOT_DIR + "/source_data/Saclay/TelecomParisOPT.IMA"
     sar_no_register = mvalab.imz2mat(sar_path)[0]
     opt_no_register = mvalab.imz2mat(opt_path)[0][:, :, 0]  # only the first image is relevant
     di, dj = -19, 147  # define registering translation
 elif args.dataset == "Sendai":
-    sar_path = "source_data/Sendai/PileTSX_AVANT_surTSX_1024x1024RECALZ4.IMA"
-    opt_path = "source_data/Sendai/PileTSX_AVANT_surTSX_1024x1024RECALOPT.IMA"
+    sar_path = ROOT_DIR + "/source_data/Sendai/PileTSX_AVANT_surTSX_1024x1024RECALZ4.IMA"
+    opt_path = ROOT_DIR + "/source_data/Sendai/PileTSX_AVANT_surTSX_1024x1024RECALOPT.IMA"
     sar_no_register = mvalab.imz2mat(sar_path)[0][:988, 33:, :]
     opt_no_register = mvalab.imz2mat("data/Sendai/PileTSX_AVANT_surTSX_1024x1024RECALOPT.IMA")[0][:988, 33:]
     di, dj = 5, -23  # define registering translation

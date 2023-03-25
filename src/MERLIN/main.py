@@ -129,6 +129,8 @@ TRAINING_SET = f"{datasetdir}/{args.dataset}_{args.method}/train/spotlight/"
 TEST_SET = f"{datasetdir}/{args.dataset}_{args.method}/validation/spotlight/"
 EVAL_SET = f"{datasetdir}/{args.dataset}_{args.method}/validation/spotlight/"
 
+torch.autograd.set_detect_anomaly(True)
+
 # ----------------
 # Define functions
 # ----------------
